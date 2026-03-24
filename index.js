@@ -1,53 +1,74 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import express from 'express';
-import 'dotenv/config';
+import cors from 'cors';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const app = express();
+app.use(cors());
 app.use(express.json());
 
-// Initialize Gemini 2.5 Flash
+// Initialize Gemini with your Environment Variable
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
+// Root Route: This fixes the "Cannot GET /" error
+app.get('/', (req, res) => {
+    res.send("🚀 EIP-Video Visual API is Live! Send a POST request to /api/analyze-visual.");
+});
+
+// The Analysis Route
 app.post('/api/analyze-visual', async (req, res) => {
+    const { videoUrl } = req.body;
+
+    if (!videoUrl) {
+        return res.status(400).json({ success: false, error: "Missing videoUrl" });
+    }
+
     try {
-        // 1. Use 3.1 Flash-Lite for maximum speed and sub-10s response
+        // Use Gemini 2.5 Flash for speed (crucial for Vercel's 10s limit)
         const model = genAI.getGenerativeModel({ 
-            model: "3.1-flash-lite", // Use 1.5-flash or 3.1-flash-lite if available
-            systemInstruction: "You are a JSON-only API. Never speak. Never use markdown. Output ONLY raw JSON strings."
+            model: "gemini-2.5-flash",
+            systemInstruction: "You are a JSON-only API. Output ONLY raw JSON. No markdown, no conversational text."
         });
 
-        const prompt = "Analyze video. Return JSON: {\"summary\": \"1 sentence\", \"top_tags\": [\"3 tags\"]}";
+        const prompt = `Analyze this video URL. Return a JSON object with:
+        "summary": (one brief sentence),
+        "top_tags": (array of 3 strings).
+        Keep it very short to ensure fast processing.`;
 
         const result = await model.generateContent([
             { text: prompt },
-            { fileData: { mimeType: "video/mp4", fileUri: req.body.videoUrl } }
+            { fileData: { mimeType: "video/mp4", fileUri: videoUrl } }
         ]);
 
-        let text = result.response.text();
+        let responseText = result.response.text();
 
-        // 2. THE CLEANER: Removes everything except the JSON brackets
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) throw new Error("No JSON found in response");
+        // CLEANER: Extracts only the JSON part if the AI adds "Here is your JSON..."
+        const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new Error("Invalid AI response format");
         
-        const cleanJson = JSON.parse(jsonMatch[0]);
+        const cleanAnalysis = JSON.parse(jsonMatch[0]);
 
-        res.json({ success: true, analysis: cleanJson });
+        res.json({
+            success: true,
+            analysis: cleanAnalysis
+        });
 
     } catch (error) {
-        console.error("Parse Error:", error);
-        res.status(500).json({ success: false, error: "AI Response was not valid JSON", details: error.message });
+        console.error("Analysis Error:", error);
+        res.status(500).json({ 
+            success: false, 
+            error: "Analysis failed", 
+            details: error.message 
+        });
     }
 });
 
-// 1. ADD THIS ROUTE HERE
-app.get('/', (req, res) => {
-    res.send("🚀 EIP-Video Visual API is Live! Send a POST request to /api/analyze-visual to begin.");
-});
-
-// 2. KEEP YOUR EXISTING CODE BELOW
+// Local Development Support
 if (process.env.NODE_ENV !== 'production') {
     const PORT = process.env.PORT || 3000;
-    app.listen(PORT, () => console.log(`🚀 Local server on http://localhost:${PORT}`));
+    app.listen(PORT, () => console.log(`🚀 Local server: http://localhost:${PORT}`));
 }
 
 export default app;
