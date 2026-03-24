@@ -1,0 +1,10 @@
+// Inside your index.html script
+const response = await fetch('http://localhost:3001/api/analyze', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ videoUrl: userInputUrl })
+});
+
+const result = await response.json();
+console.log("Analysis Result:", result);
+// Update your UI with result.summary and result.visuals
