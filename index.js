@@ -27,15 +27,43 @@ app.post('/api/analyze-visual', async (req, res) => {
 
     try {
         // Use Gemini 2.5 Flash for speed (crucial for Vercel's 10s limit)
-        const model = genAI.getGenerativeModel({ 
-            model: "gemini-2.5-flash",
-            systemInstruction: "You are a JSON-only API. Output ONLY raw JSON. No markdown, no conversational text."
-        });
+        // Inside your app.post('/api/analyze-visual', ...)
+const prompt = `
+  Analyze this video. Provide:
+  1. A brief "summary".
+  2. A "timeline" array. For every 10 seconds of video, provide one object with:
+     "time": (e.g., "00:10"),
+     "description": (visual event),
+     "script": (any spoken words or text on screen, or "N/A" if silent).
+  
+  Keep descriptions very short (max 10 words) to ensure the response stays under the 10s limit.
+  Return ONLY JSON.
+`;
 
-        const prompt = `Analyze this video URL. Return a JSON object with:
-        "summary": (one brief sentence),
-        "top_tags": (array of 3 strings).
-        Keep it very short to ensure fast processing.`;
+const model = genAI.getGenerativeModel({ 
+    model: "gemini-2.5-flash",
+    generationConfig: { 
+        responseMimeType: "application/json",
+        // We set a strict schema so Gemini 2.5 knows exactly what "script" is
+        responseSchema: {
+            type: "object",
+            properties: {
+                summary: { type: "string" },
+                timeline: {
+                    type: "array",
+                    items: {
+                        type: "object",
+                        properties: {
+                            time: { type: "string" },
+                            description: { type: "string" },
+                            script: { type: "string" }
+                        }
+                    }
+                }
+            }
+        }
+    }
+});
 
         const result = await model.generateContent([
             { text: prompt },
