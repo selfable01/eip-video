@@ -16,7 +16,7 @@ app.post('/api/analyze-visual', async (req, res) => {
     try {
         // 1. Use a more descriptive model name and explicit JSON Schema
         const model = genAI.getGenerativeModel({ 
-            model: "gemini-1.5-flash",
+            model: "gemini-2.5-flash",
             generationConfig: { 
                 responseMimeType: "application/json",
                 // Limit tokens to prevent Vercel 5MB payload issues
