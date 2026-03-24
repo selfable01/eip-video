@@ -16,26 +16,24 @@ app.post('/api/analyze-visual', async (req, res) => {
     try {
         // 1. Use a more descriptive model name and explicit JSON Schema
         const model = genAI.getGenerativeModel({ 
-            model: "gemini-2.5-flash",
-            generationConfig: { 
-                responseMimeType: "application/json",
-                // Limit tokens to prevent Vercel 5MB payload issues
-                maxOutputTokens: 1000 
-            }
-        });
+    model: "gemini-2.5-flash",
+    generationConfig: { 
+        responseMimeType: "application/json",
+        // Lower tokens = faster response
+        maxOutputTokens: 500, 
+        temperature: 0.2 // Lower temperature is faster/more stable
+    }
+});
 
         // 2. Strict prompt to avoid empty objects
         const prompt = `
-            Act as a visual video analyst. Watch this video and provide:
-            1. A 2-sentence visual summary.
-            2. A timeline of key visual changes with "time" and "description" keys.
-            3. A list of "top_tags".
-
-            IMPORTANT: Ensure the 'timeline' objects are NOT empty. 
-            Example: {"time": "00:05", "description": "Child playing with a blue toy car"}
-
-            Return ONLY valid JSON.
-        `;
+  Analyze this video. BE EXTREMELY BRIEF. 
+  1. Summary: Max 15 words.
+  2. Timeline: Max 3 key moments.
+  3. Tags: Max 3 tags.
+  
+  Format as JSON: {"summary": "", "timeline": [{"time": "", "description": ""}], "top_tags": []}
+`;
 
         const result = await model.generateContent([
             { text: prompt },
