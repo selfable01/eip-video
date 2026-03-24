@@ -54,6 +54,12 @@ app.post('/api/analyze-visual', async (req, res) => {
     }
 });
 
+// 1. ADD THIS ROUTE HERE
+app.get('/', (req, res) => {
+    res.send("🚀 EIP-Video Visual API is Live! Send a POST request to /api/analyze-visual to begin.");
+});
+
+// 2. KEEP YOUR EXISTING CODE BELOW
 if (process.env.NODE_ENV !== 'production') {
     const PORT = process.env.PORT || 3000;
     app.listen(PORT, () => console.log(`🚀 Local server on http://localhost:${PORT}`));
