@@ -10,36 +10,32 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 app.post('/api/analyze-visual', async (req, res) => {
     try {
+        // 1. Use 3.1 Flash-Lite for maximum speed and sub-10s response
         const model = genAI.getGenerativeModel({ 
-            model: "gemini-2.5-flash",
-            // 1. System Instruction is the strongest way to force JSON
-            systemInstruction: "You are a JSON-only generator. Never include conversational text like 'Here is' or 'Certainly'. Output only valid JSON.",
+            model: "3.1-flash-lite", // Use 1.5-flash or 3.1-flash-lite if available
+            systemInstruction: "You are a JSON-only API. Never speak. Never use markdown. Output ONLY raw JSON strings."
         });
 
-        const result = await model.generateContent({
-            contents: [{ 
-                parts: [
-                    { text: "Analyze video. Return JSON: {\"summary\": \"string\", \"top_tags\": [\"string\"]}" },
-                    { fileData: { mimeType: "video/mp4", fileUri: req.body.videoUrl } }
-                ] 
-            }],
-            generationConfig: { 
-                responseMimeType: "application/json", // Forces JSON Mode
-                maxOutputTokens: 200,
-                temperature: 0.1 
-            }
-        });
+        const prompt = "Analyze video. Return JSON: {\"summary\": \"1 sentence\", \"top_tags\": [\"3 tags\"]}";
 
-        let responseText = result.response.text();
+        const result = await model.generateContent([
+            { text: prompt },
+            { fileData: { mimeType: "video/mp4", fileUri: req.body.videoUrl } }
+        ]);
 
-        // 2. Cleaning Regex: Removes ```json ... ``` blocks if Gemini adds them
-        responseText = responseText.replace(/```json|```/g, "").trim();
+        let text = result.response.text();
 
-        res.json({ success: true, analysis: JSON.parse(responseText) });
+        // 2. THE CLEANER: Removes everything except the JSON brackets
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new Error("No JSON found in response");
+        
+        const cleanJson = JSON.parse(jsonMatch[0]);
+
+        res.json({ success: true, analysis: cleanJson });
 
     } catch (error) {
-        console.error("JSON Error:", error);
-        res.status(500).json({ success: false, error: "AI Response was not valid JSON" });
+        console.error("Parse Error:", error);
+        res.status(500).json({ success: false, error: "AI Response was not valid JSON", details: error.message });
     }
 });
 
