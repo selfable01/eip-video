@@ -11,46 +11,60 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 app.post('/api/analyze-visual', async (req, res) => {
     const { videoUrl } = req.body;
 
-    try {
-        console.log(`✨ Cleaning up analysis for: ${videoUrl}`);
+    if (!videoUrl) return res.status(400).json({ error: "Missing videoUrl" });
 
+    try {
+        // 1. Use a more descriptive model name and explicit JSON Schema
         const model = genAI.getGenerativeModel({ 
-            model: "gemini-2.5-flash",
-            generationConfig: { responseMimeType: "application/json" }
+            model: "gemini-1.5-flash",
+            generationConfig: { 
+                responseMimeType: "application/json",
+                // Limit tokens to prevent Vercel 5MB payload issues
+                maxOutputTokens: 1000 
+            }
         });
 
-        const prompt = `Analyze this video visually. Output a JSON with "overview", "scenes", and "tags".`;
+        // 2. Strict prompt to avoid empty objects
+        const prompt = `
+            Act as a visual video analyst. Watch this video and provide:
+            1. A 2-sentence visual summary.
+            2. A timeline of key visual changes with "time" and "description" keys.
+            3. A list of "top_tags".
+
+            IMPORTANT: Ensure the 'timeline' objects are NOT empty. 
+            Example: {"time": "00:05", "description": "Child playing with a blue toy car"}
+
+            Return ONLY valid JSON.
+        `;
 
         const result = await model.generateContent([
             { text: prompt },
             { fileData: { mimeType: "video/mp4", fileUri: videoUrl } }
         ]);
 
-        const data = JSON.parse(result.response.text());
+        const responseText = result.response.text();
+        
+        // 3. Debugging: This will show up in your Vercel Logs (Dashboard)
+        console.log("Raw Gemini Output:", responseText);
 
-        // Tidy Up: We restructure the response for your frontend
-        const tidyResponse = {
+        const analysis = JSON.parse(responseText);
+
+        res.json({
             success: true,
             meta: {
                 video_url: videoUrl,
                 processed_at: new Date().toISOString()
             },
-            analysis: {
-                summary: data.summary || data.overview,
-                // We simplify the scenes to just time and event
-                timeline: (data.scenes || []).map(s => ({
-                    time: s.timestamp,
-                    event: s.description
-                })),
-                // We limit tags to the top 10 most relevant visual elements
-                top_tags: (data.detected_elements || []).slice(0, 10)
-            }
-        };
-
-        res.json(tidyResponse);
+            analysis: analysis
+        });
 
     } catch (error) {
-        res.status(500).json({ error: "Failed to tidy up the visual data." });
+        console.error("Deployment Error:", error);
+        res.status(500).json({ 
+            success: false, 
+            error: "Analysis failed", 
+            details: error.message 
+        });
     }
 });
 
