@@ -20,19 +20,20 @@ app.post('/api/analyze-visual', async (req, res) => {
     generationConfig: { 
         responseMimeType: "application/json",
         // Lower tokens = faster response
-        maxOutputTokens: 500, 
-        temperature: 0.2 // Lower temperature is faster/more stable
+        maxOutputTokens: 200, 
+        temperature: 0.1 // Lower temperature is faster/more stable
     }
 });
 
         // 2. Strict prompt to avoid empty objects
         const prompt = `
-  Analyze this video. BE EXTREMELY BRIEF. 
-  1. Summary: Max 15 words.
-  2. Timeline: Max 3 key moments.
-  3. Tags: Max 3 tags.
+  Analyze video URL. 
+  Provide ONLY: 
+  1. "summary" (1 sentence)
+  2. "top_tags" (3 words)
   
-  Format as JSON: {"summary": "", "timeline": [{"time": "", "description": ""}], "top_tags": []}
+  Do NOT provide a timeline. 
+  Return JSON: {"summary": "...", "top_tags": []}
 `;
 
         const result = await model.generateContent([
