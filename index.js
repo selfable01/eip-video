@@ -9,61 +9,37 @@ app.use(express.json());
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 app.post('/api/analyze-visual', async (req, res) => {
-    const { videoUrl } = req.body;
-
-    if (!videoUrl) return res.status(400).json({ error: "Missing videoUrl" });
-
     try {
-        // 1. Use a more descriptive model name and explicit JSON Schema
         const model = genAI.getGenerativeModel({ 
-    model: "gemini-2.5-flash",
-    generationConfig: { 
-        responseMimeType: "application/json",
-        // Lower tokens = faster response
-        maxOutputTokens: 200, 
-        temperature: 0.1 // Lower temperature is faster/more stable
-    }
-});
-
-        // 2. Strict prompt to avoid empty objects
-        const prompt = `
-  Analyze video URL. 
-  Provide ONLY: 
-  1. "summary" (1 sentence)
-  2. "top_tags" (3 words)
-  
-  Do NOT provide a timeline. 
-  Return JSON: {"summary": "...", "top_tags": []}
-`;
-
-        const result = await model.generateContent([
-            { text: prompt },
-            { fileData: { mimeType: "video/mp4", fileUri: videoUrl } }
-        ]);
-
-        const responseText = result.response.text();
-        
-        // 3. Debugging: This will show up in your Vercel Logs (Dashboard)
-        console.log("Raw Gemini Output:", responseText);
-
-        const analysis = JSON.parse(responseText);
-
-        res.json({
-            success: true,
-            meta: {
-                video_url: videoUrl,
-                processed_at: new Date().toISOString()
-            },
-            analysis: analysis
+            model: "gemini-2.5-flash",
+            // 1. System Instruction is the strongest way to force JSON
+            systemInstruction: "You are a JSON-only generator. Never include conversational text like 'Here is' or 'Certainly'. Output only valid JSON.",
         });
+
+        const result = await model.generateContent({
+            contents: [{ 
+                parts: [
+                    { text: "Analyze video. Return JSON: {\"summary\": \"string\", \"top_tags\": [\"string\"]}" },
+                    { fileData: { mimeType: "video/mp4", fileUri: req.body.videoUrl } }
+                ] 
+            }],
+            generationConfig: { 
+                responseMimeType: "application/json", // Forces JSON Mode
+                maxOutputTokens: 200,
+                temperature: 0.1 
+            }
+        });
+
+        let responseText = result.response.text();
+
+        // 2. Cleaning Regex: Removes ```json ... ``` blocks if Gemini adds them
+        responseText = responseText.replace(/```json|```/g, "").trim();
+
+        res.json({ success: true, analysis: JSON.parse(responseText) });
 
     } catch (error) {
-        console.error("Deployment Error:", error);
-        res.status(500).json({ 
-            success: false, 
-            error: "Analysis failed", 
-            details: error.message 
-        });
+        console.error("JSON Error:", error);
+        res.status(500).json({ success: false, error: "AI Response was not valid JSON" });
     }
 });
 
